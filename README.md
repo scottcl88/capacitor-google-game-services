@@ -1,0 +1,1 @@
+# capacitor-google-game-services
