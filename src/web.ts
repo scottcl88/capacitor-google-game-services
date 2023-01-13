@@ -7,4 +7,20 @@ export class GoogleGameServicesWeb extends WebPlugin implements GoogleGameServic
     console.log('ECHO', options);
     return options;
   }
+  signIn(): Promise<any> {
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve();
+  }
+  showSavedGamesUI(): Promise<any> {
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve();
+  }
+  saveGame(): Promise<any> {
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve();
+  }
+  loadGame(): Promise<any> {
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve();
+  }
 }
