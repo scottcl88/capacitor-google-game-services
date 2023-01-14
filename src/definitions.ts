@@ -3,6 +3,6 @@ export interface GoogleGameServicesPlugin {
 
   signIn(): Promise<any>;
   showSavedGamesUI(): Promise<any>;
-  saveGame(): Promise<any>;
+  saveGame(options: { title: string, data: string }): Promise<any>;
   loadGame(): Promise<any>;
 }

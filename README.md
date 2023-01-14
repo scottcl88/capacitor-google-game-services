@@ -16,7 +16,7 @@ npx cap sync
 * [`echo(...)`](#echo)
 * [`signIn()`](#signin)
 * [`showSavedGamesUI()`](#showsavedgamesui)
-* [`saveGame()`](#savegame)
+* [`saveGame(...)`](#savegame)
 * [`loadGame()`](#loadgame)
 
 </docgen-index>
@@ -61,11 +61,15 @@ showSavedGamesUI() => Promise<any>
 --------------------
 
 
-### saveGame()
+### saveGame(...)
 
 ```typescript
-saveGame() => Promise<any>
+saveGame(options: { title: string; data: string; }) => Promise<any>
 ```
+
+| Param         | Type                                          |
+| ------------- | --------------------------------------------- |
+| **`options`** | <code>{ title: string; data: string; }</code> |
 
 **Returns:** <code>Promise&lt;any&gt;</code>
 

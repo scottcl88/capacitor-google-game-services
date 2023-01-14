@@ -1,58 +1,36 @@
 package com.capacitor.community.googlegameservices;
 
-import static android.app.Activity.RESULT_OK;
-
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.util.Log;
-import android.view.View;
-import android.widget.Toast;
 
+import androidx.activity.result.ActivityResult;
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
-import com.google.android.gms.auth.api.signin.GoogleSignInClient;
-import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.snapshot.Snapshot;
 import com.google.android.gms.games.snapshot.SnapshotMetadata;
-import com.google.android.gms.games.snapshot.SnapshotMetadataBuffer;
 import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
-import com.google.android.gms.tasks.Continuation;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
-import com.google.android.gms.common.api.Result;
-
-import org.json.JSONObject;
-import org.json.JSONTokener;
-
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.nio.ByteBuffer;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Random;
 
 @CapacitorPlugin(name = "GoogleGameServices")
 public class GoogleGameServicesPlugin extends Plugin {
 
-    private static final int RC_SAVED_GAMES = 9009;
     private final String TAG = "GoogleGameServices";
 
     // current save game - serializable to and from the saved game
@@ -60,54 +38,8 @@ public class GoogleGameServicesPlugin extends Plugin {
     // Client used to interact with Google Snapshots.
     private SnapshotsClient mSnapshotsClient = null;
 
-
-
-    // Request code used to invoke sign in user interactions.
-    private static final int RC_SIGN_IN = 9001;
-
-    // Request code for listing saved games
-    private static final int RC_LIST_SAVED_GAMES = 9002;
-
-    // Request code for selecting a snapshot
-    private static final int RC_SELECT_SNAPSHOT = 9003;
-
     // Request code for saving the game to a snapshot.
     private static final int RC_SAVE_SNAPSHOT = 9004;
-
-    private static final int RC_LOAD_SNAPSHOT = 9005;
-
-    // Client used to sign in with Google APIs
-    private GoogleSignInClient mGoogleSignInClient;
-
-    private String currentSaveName = "snapshotTemp";
-
-    // world we're currently viewing
-    int mWorld = 1;
-    private static final int WORLD_MIN = 1;
-    private static final int WORLD_MAX = 20;
-    private static final int LEVELS_PER_WORLD = 12;
-
-    // level we're currently "playing"
-    int mLevel = 0;
-
-    // state of "playing" - used to make the back button work correctly
-    boolean mInLevel = false;
-
-    // progress dialog we display while we're loading state from the cloud
-    //ProgressDialog mLoadingDialog = null;
-
-    // star strings (we use the Unicode BLACK STAR and WHITE STAR characters -- lazy graphics!)
-    final static String[] STAR_STRINGS = {
-            "\u2606\u2606\u2606\u2606\u2606", // 0 stars
-            "\u2605\u2606\u2606\u2606\u2606", // 1 star
-            "\u2605\u2605\u2606\u2606\u2606", // 2 stars
-            "\u2605\u2605\u2605\u2606\u2606", // 3 stars
-            "\u2605\u2605\u2605\u2605\u2606", // 4 stars
-            "\u2605\u2605\u2605\u2605\u2605", // 5 stars
-    };
-
-    // Members related to the conflict resolution chooser of Snapshots.
-    final static int MAX_SNAPSHOT_RESOLVE_RETRIES = 50;
 
     @PluginMethod
     public void echo(PluginCall call) {
@@ -146,11 +78,12 @@ public class GoogleGameServicesPlugin extends Plugin {
 
     @PluginMethod()
     public void saveGame(final PluginCall call) {
-        Log.d(TAG, "saveGame called");
+        String title = call.getString("title");
+        String data = call.getString("data");
+        Log.d(TAG, "saveGame called with title: "+title+" data: "+data);
 
-        mSaveGame.setLevelStars("LevelTwo", 2);
+        mSaveGame.setGameObject("Game #1", "{'something':'1'}");
 
-        // Load a snapshot.
         SnapshotMetadata snapshotMetadata =
                 getActivity().getIntent().getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
         saveSnapshot(snapshotMetadata);
@@ -160,6 +93,12 @@ public class GoogleGameServicesPlugin extends Plugin {
     public void loadGame(final PluginCall call) {
         Log.d(TAG, "loadGame called..");
 
+        loadSnapshot();
+
+        Log.d(TAG, "Finished loadGame with: "+mSaveGame);
+    }
+
+    private void loadSnapshot(){
         // Get the SnapshotsClient from the signed in account.
         SnapshotsClient snapshotsClient =
                 PlayGames.getSnapshotsClient(getActivity());
@@ -167,62 +106,27 @@ public class GoogleGameServicesPlugin extends Plugin {
         // In the case of a conflict, the most recently modified version of this snapshot will be used.
         int conflictResolutionPolicy = SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED;
 
-        //final String filename = useMetadata ? snapshotMetadata.getUniqueName() : currentSaveName;
         // Open the saved game using its name.
-        snapshotsClient.open(currentSaveName, true, conflictResolutionPolicy)
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "Error while opening Snapshot.", e);
-                    }
-                }).continueWith(new Continuation<SnapshotsClient.DataOrConflict<Snapshot>, byte[]>() {
-                    @Override
-                    public byte[] then(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) throws Exception {
-                        Snapshot snapshot = task.getResult().getData();
+        snapshotsClient.open(mCurrentSaveName, true, conflictResolutionPolicy)
+                .addOnFailureListener(e -> Log.e(TAG, "Error while opening Snapshot.", e)).continueWith(task -> {
+                    Snapshot snapshot = task.getResult().getData();
 
-                        // Opening the snapshot was a success and any conflicts have been resolved.
-                        try {
-                            // Extract the raw data from the snapshot.
-                            byte[] result = snapshot.getSnapshotContents().readFully();
-                            return result;
-                        } catch (IOException e) {
-                            Log.e(TAG, "Error while reading Snapshot.", e);
-                        }
+                    // Opening the snapshot was a success and any conflicts have been resolved.
+                    try {
+                        // Extract the raw data from the snapshot.
+                        assert snapshot != null;
+                        return snapshot.getSnapshotContents().readFully();
+                    } catch (IOException e) {
+                        Log.e(TAG, "Error while reading Snapshot.", e);
+                    }
 
-                        return null;
-                    }
-                }).addOnCompleteListener(new OnCompleteListener<byte[]>() {
-                    @Override
-                    public void onComplete(@NonNull Task<byte[]> task) {
-                        byte[] result = task.getResult();
-                        mSaveGame = new SaveGame(result);
-                        Log.d(TAG, "onComplete loadGame = "+mSaveGame.toString());
-                        // Dismiss progress dialog and reflect the changes in the UI when complete.
-                        // ...
-                    }
+                    return null;
+                }).addOnCompleteListener(task -> {
+                    byte[] result = task.getResult();
+                    mSaveGame = new SaveGame(result);
+                    Log.d(TAG, "onComplete loadGame = "+mSaveGame);
+                    // Dismiss progress dialog and reflect the changes in the UI when complete.
                 });
-
-        Log.d(TAG, "Finished loadGame with: "+mSaveGame.toString());
-    }
-    public static Object getObject(byte[] bytes) throws IOException,
-            ClassNotFoundException {
-        ByteArrayInputStream bi = new ByteArrayInputStream(bytes);
-        ObjectInputStream oi = new ObjectInputStream(bi);
-        Object obj = oi.readObject();
-        bi.close();
-        oi.close();
-        return obj;
-    }
-
-    public static Object getObject(ByteBuffer byteBuffer)
-            throws ClassNotFoundException, IOException {
-        InputStream input = new ByteArrayInputStream(byteBuffer.array());
-        ObjectInputStream oi = new ObjectInputStream(input);
-        Object obj = oi.readObject();
-        input.close();
-        oi.close();
-        byteBuffer.clear();
-        return obj;
     }
 
     private void startSignIn() {
@@ -251,89 +155,71 @@ public class GoogleGameServicesPlugin extends Plugin {
         Task<Intent> intentTask = snapshotsClient.getSelectSnapshotIntent(
                 "See My Saves", true, true, maxNumberOfSavedGamesToShow);
 
-        intentTask.addOnSuccessListener(new OnSuccessListener<Intent>() {
-            @Override
-            public void onSuccess(Intent intent) {
-                startActivityForResult(call, intent, RC_SAVED_GAMES);
-            }
+
+        intentTask.addOnSuccessListener(intent -> {
+            Log.i(TAG,"doShowSavedGameUI onSuccess called for Intent");
+            startActivityForResult(call, intent, "GoogleActivityResult");
+        });
+
+        intentTask.addOnCompleteListener(intent -> {
+                Log.i(TAG,"doShowSavedGameUI onComplete called for Intent");
+        });
+
+        intentTask.addOnFailureListener(intent -> {
+            Log.i(TAG,"doShowSavedGameUI onFailure called for Intent");
         });
     }
+    private String mCurrentSaveName = "snapshotTemp";
 
+    /**
+     * This callback will be triggered after you call startActivityForResult from the
+     * showSavedGamesUI method.
+     */
+    @ActivityCallback
+    public void GoogleActivityResult(PluginCall call, ActivityResult result) {
+        Log.i(TAG, "onActivityResult is called!");
+        Intent intent = result.getData();
+        if (intent != null) {
+            if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
+                // Load a snapshot.
+                SnapshotMetadata snapshotMetadata =
+                        intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
+                mCurrentSaveName = snapshotMetadata.getUniqueName();
+                Log.i(TAG, "Load snapshot from saved: "+mCurrentSaveName);
+                loadSnapshot();
+            } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
+                // Create a new snapshot named with a unique string
+                String unique = new BigInteger(281, new Random()).toString(13);
+                mCurrentSaveName = "snapshotTemp-" + unique;
+
+                Log.i(TAG, "Create snapshot from saved: "+mCurrentSaveName);
+                // Create the new snapshot
+                SnapshotMetadata snapshotMetadata =
+                        getActivity().getIntent().getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
+                saveSnapshot(snapshotMetadata);
+            }
+        }
+    }
     private Task<SnapshotsClient.DataOrConflict<Snapshot>> waitForClosedAndOpen(final SnapshotMetadata snapshotMetadata) {
 
         final boolean useMetadata = snapshotMetadata != null && snapshotMetadata.getUniqueName() != null;
         if (useMetadata) {
             Log.i(TAG, "Opening snapshot using metadata: " + snapshotMetadata);
         } else {
-            Log.i(TAG, "Opening snapshot using currentSaveName: " + currentSaveName);
+            Log.i(TAG, "Opening snapshot using currentSaveName: " + mCurrentSaveName);
         }
 
-        final String filename = useMetadata ? snapshotMetadata.getUniqueName() : currentSaveName;
+        final String filename = useMetadata ? snapshotMetadata.getUniqueName() : mCurrentSaveName;
 
         return SnapshotCoordinator.getInstance()
                 .waitForClosed(filename)
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "There was a problem waiting for the file to close!", e);
-                    }
-                })
-                .continueWithTask(new Continuation<Result, Task<SnapshotsClient.DataOrConflict<Snapshot>>>() {
-                    @Override
-                    public Task<SnapshotsClient.DataOrConflict<Snapshot>> then(@NonNull Task<Result> task) throws Exception {
-                        Task<SnapshotsClient.DataOrConflict<Snapshot>> openTask = useMetadata
-                                ? SnapshotCoordinator.getInstance().open(mSnapshotsClient, snapshotMetadata)
-                                : SnapshotCoordinator.getInstance().open(mSnapshotsClient, filename, true);
-                        return openTask.addOnFailureListener(new OnFailureListener() {
-                            @Override
-                            public void onFailure(@NonNull Exception e) {
-                                Log.e(TAG, "There was a problem waiting for the file to close!", e);
-                            }
-                        });
-                    }
+                .addOnFailureListener(e -> Log.e(TAG, "There was a problem waiting for the file to close!", e))
+                .continueWithTask(task -> {
+                    Task<SnapshotsClient.DataOrConflict<Snapshot>> openTask = useMetadata
+                            ? SnapshotCoordinator.getInstance().open(mSnapshotsClient, snapshotMetadata)
+                            : SnapshotCoordinator.getInstance().open(mSnapshotsClient, filename, true);
+                    return openTask.addOnFailureListener(e -> Log.e(TAG, "There was a problem waiting for the file to close!", e));
                 });
-    }
-
-    /**
-     * Loads a Snapshot from the user's synchronized storage.
-     */
-    void loadFromSnapshot(final SnapshotMetadata snapshotMetadata) {
-        waitForClosedAndOpen(snapshotMetadata)
-                .addOnSuccessListener(new OnSuccessListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
-                    @Override
-                    public void onSuccess(SnapshotsClient.DataOrConflict<Snapshot> result) {
-
-                        // if there is a conflict  - then resolve it.
-                        Snapshot snapshot = processOpenDataOrConflict(RC_LOAD_SNAPSHOT, result, 0);
-
-                        if (snapshot == null) {
-                            Log.w(TAG, "Conflict was not resolved automatically, waiting for user to resolve.");
-                        } else {
-                            try {
-                                readSavedGame(snapshot);
-                                Log.i(TAG, "Snapshot loaded.");
-                            } catch (IOException e) {
-                                Log.e(TAG, "Error while reading snapshot contents: " + e.getMessage());
-                            }
-                        }
-
-                        SnapshotCoordinator.getInstance().discardAndClose(mSnapshotsClient, snapshot)
-                                .addOnFailureListener(new OnFailureListener() {
-                                    @Override
-                                    public void onFailure(@NonNull Exception e) {
-                                        Log.e(TAG, "There was a problem discarding the snapshot!", e);
-//                                        handleException(e, "There was a problem discarding the snapshot!");
-                                    }
-                                });
-
-//                        hideAlertBar();
-//                        updateUi();
-                    }
-                });
-    }
-
-    private void readSavedGame(Snapshot snapshot) throws IOException {
-        mSaveGame = new SaveGame(snapshot.getSnapshotContents().readFully());
     }
 
     /**
@@ -358,6 +244,7 @@ public class GoogleGameServicesPlugin extends Plugin {
         Log.i(TAG, "Open resulted in a conflict!");
 
         SnapshotsClient.SnapshotConflict conflict = result.getConflict();
+        assert conflict != null;
         final Snapshot snapshot = conflict.getSnapshot();
         final Snapshot conflictSnapshot = conflict.getConflictingSnapshot();
 
@@ -373,84 +260,30 @@ public class GoogleGameServicesPlugin extends Plugin {
     }
 
     /**
-     * Handles resolving the snapshot conflict asynchronously.
-     *
-     * @param requestCode      - the request currently being processed.  This is used to forward on the
-     *                         information to another activity, or to send the result intent.
-     * @param conflictId       - the id of the conflict being resolved.
-     * @param retryCount       - the current iteration of the retry.  The first retry should be 0.
-     * @param snapshotMetadata - the metadata of the snapshot that is selected to resolve the conflict.
-     */
-    private Task<SnapshotsClient.DataOrConflict<Snapshot>> resolveSnapshotConflict(final int requestCode,
-                                                                                   final String conflictId,
-                                                                                   final int retryCount,
-                                                                                   final SnapshotMetadata snapshotMetadata) {
-
-        Log.i(TAG, "Resolving conflict retry count = " + retryCount + " conflictid = " + conflictId);
-        return waitForClosedAndOpen(snapshotMetadata)
-                .continueWithTask(new Continuation<SnapshotsClient.DataOrConflict<Snapshot>, Task<SnapshotsClient.DataOrConflict<Snapshot>>>() {
-                    @Override
-                    public Task<SnapshotsClient.DataOrConflict<Snapshot>> then(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) throws Exception {
-                        return SnapshotCoordinator.getInstance().resolveConflict(
-                                        mSnapshotsClient,
-                                        conflictId,
-                                        task.getResult().getData())
-                                .addOnCompleteListener(new OnCompleteListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
-                                    @Override
-                                    public void onComplete(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) {
-                                        if (!task.isSuccessful()) {
-                                            Log.e(TAG, "There was a problem opening a file for resolving the conflict!", task.getException());
-                                            return;
-                                        }
-
-                                        Snapshot snapshot = processOpenDataOrConflict(requestCode,
-                                                task.getResult(),
-                                                retryCount);
-                                        Log.d(TAG, "resolved snapshot conflict - snapshot is " + snapshot);
-                                        // if there is a snapshot returned, then pass it along to onActivityResult.
-                                        // otherwise, another activity will be used to resolve the conflict so we
-                                        // don't need to do anything here.
-                                        if (snapshot != null) {
-                                            Intent intent = new Intent("");
-//                                            intent.putExtra(SelectSnapshotActivity.SNAPSHOT_METADATA, snapshot.getMetadata().freeze());
-//                                            onActivityResult(requestCode, RESULT_OK, intent);
-                                        }
-                                    }
-                                });
-                    }
-                });
-    }
-    /**
      * Prepares saving Snapshot to the user's synchronized storage, conditionally resolves errors,
      * and stores the Snapshot.
      */
-    void saveSnapshot(final SnapshotMetadata snapshotMetadata) {
+    private void saveSnapshot(final SnapshotMetadata snapshotMetadata) {
         waitForClosedAndOpen(snapshotMetadata)
-                .addOnCompleteListener(new OnCompleteListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
-                    @Override
-                    public void onComplete(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) {
-                        SnapshotsClient.DataOrConflict<Snapshot> result = task.getResult();
-                        Snapshot snapshotToWrite = processOpenDataOrConflict(RC_SAVE_SNAPSHOT, result, 0);
+                .addOnCompleteListener(task -> {
+                    SnapshotsClient.DataOrConflict<Snapshot> result = task.getResult();
+                    Snapshot snapshotToWrite = processOpenDataOrConflict(RC_SAVE_SNAPSHOT, result, 0);
 
-                        if (snapshotToWrite == null) {
-                            // No snapshot available yet; waiting on the user to choose one.
-                            return;
-                        }
-
-                        Log.d(TAG, "Writing data to snapshot: " + snapshotToWrite.getMetadata().getUniqueName());
-                        writeSnapshot(snapshotToWrite)
-                                .addOnCompleteListener(new OnCompleteListener<SnapshotMetadata>() {
-                                    @Override
-                                    public void onComplete(@NonNull Task<SnapshotMetadata> task) {
-                                        if (task.isSuccessful()) {
-                                            Log.i(TAG, "Snapshot saved!");
-                                        } else {
-
-                                            Log.e(TAG, "There was a problem writing the snapshot!", task.getException());
-                                        }
-                                    }
-                                });
+                    if (snapshotToWrite == null) {
+                        // No snapshot available yet; waiting on the user to choose one.
+                        return;
                     }
+
+                    Log.d(TAG, "Writing data to snapshot: " + snapshotToWrite.getMetadata().getUniqueName());
+                    writeSnapshot(snapshotToWrite)
+                            .addOnCompleteListener(task1 -> {
+                                if (task1.isSuccessful()) {
+                                    Log.i(TAG, "Snapshot saved!");
+                                } else {
+
+                                    Log.e(TAG, "There was a problem writing the snapshot!", task1.getException());
+                                }
+                            });
                 });
     }
 
@@ -464,15 +297,9 @@ public class GoogleGameServicesPlugin extends Plugin {
 
         // Save the snapshot.
         SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+                .setCoverImage()
                 .setDescription("Modified data at: " + Calendar.getInstance().getTime())
                 .build();
         return SnapshotCoordinator.getInstance().commitAndClose(mSnapshotsClient, snapshot, metadataChange);
-    }
-
-    /**
-     * Prints a log message (convenience method).
-     */
-    void log(String message) {
-        Log.d(TAG, message);
     }
 }

@@ -26,31 +26,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-/**
- * Represents the player's progress in the game. The player's progress is how many stars
- * they got on each level.
- *
- * @author Bruno Oliveira
- */
 public class SaveGame {
 
-  private static final String TAG = "CollectAllTheStars";
+  private static final String TAG = "GoogleGameServices";
 
   // serialization format version
   private static final String SERIAL_VERSION = "1.1";
 
-  // Maps a level name (like "2-8") to the number of stars the user has in that level.
-  // Any key that doesn't exist in this map is considered to be associated to the value 0.
-  Map<String, Integer> mLevelStars = new HashMap<String, Integer>();
+  Map<String, String> mGameObjects = new HashMap<String, String>();
 
-  // Minimum and maximum stars the player can have on a level
-  public static final int MIN_STARS = 0, MAX_STARS = 5;
-
-  /**
-   * Constructs an empty SaveGame object. No stars on no levels.
-   */
-  public SaveGame() {
-  }
+  public SaveGame() {  }
 
   /**
    * Constructs a SaveGame object from serialized data.
@@ -69,13 +54,6 @@ public class SaveGame {
   }
 
   /**
-   * Constructs a SaveGame object by reading from a SharedPreferences.
-   */
-  public SaveGame(SharedPreferences sp, String key) {
-    loadFromJson(sp.getString(key, ""));
-  }
-
-  /**
    * Replaces this SaveGame's content with the content loaded from the given JSON string.
    */
   public void loadFromJson(String json) {
@@ -88,12 +66,12 @@ public class SaveGame {
       if (!format.equals(SERIAL_VERSION)) {
         throw new RuntimeException("Unexpected loot format " + format);
       }
-      JSONObject levels = obj.getJSONObject("levels");
-      Iterator<?> iter = levels.keys();
+      JSONObject games = obj.getJSONObject("games");
+      Iterator<?> iter = games.keys();
 
       while (iter.hasNext()) {
-        String levelName = (String) iter.next();
-        mLevelStars.put(levelName, levels.getInt(levelName));
+        String title = (String) iter.next();
+        mGameObjects.put(title, games.getString(title));
       }
     } catch (JSONException ex) {
       ex.printStackTrace();
@@ -101,7 +79,7 @@ public class SaveGame {
 
       // Initializing with empty stars if the game file is corrupt.
       // NOTE: In your game, you want to try recovering from the snapshot payload.
-      mLevelStars.clear();
+      mGameObjects.clear();
     } catch (NumberFormatException ex) {
       ex.printStackTrace();
       throw new RuntimeException("Save data has an invalid number in it: " + json, ex);
@@ -121,14 +99,14 @@ public class SaveGame {
   @Override
   public String toString() {
     try {
-      JSONObject levels = new JSONObject();
-      for (String levelName : mLevelStars.keySet()) {
-        levels.put(levelName, mLevelStars.get(levelName));
+      JSONObject games = new JSONObject();
+      for (String gameTitle : mGameObjects.keySet()) {
+        games.put(gameTitle, mGameObjects.get(gameTitle));
       }
 
       JSONObject obj = new JSONObject();
       obj.put("version", SERIAL_VERSION);
-      obj.put("levels", levels);
+      obj.put("games", games);
       return obj.toString();
     } catch (JSONException ex) {
       ex.printStackTrace();
@@ -137,102 +115,24 @@ public class SaveGame {
   }
 
   /**
-   * Computes the union of this SaveGame with the given SaveGame. The union will have any
-   * levels present in either operand. If the same level is present in both operands,
-   * then the number of stars will be the greatest of the two.
-   *
-   * @param other The other operand with which to compute the union.
-   * @return The result of the union.
-   */
-  public SaveGame unionWith(SaveGame other) {
-    SaveGame result = clone();
-    for (String levelName : other.mLevelStars.keySet()) {
-      int existingStars = result.getLevelStars(levelName);
-      int newStars = other.getLevelStars(levelName);
-
-      // only overwrite if number of stars is greater
-      if (newStars > existingStars) {
-        result.setLevelStars(levelName, newStars);
-      }
-
-      // note that this code doesn't preserve mappings from a level to the value 0,
-      // but that is not a problem because, in our semantics, the absence of a mapping
-      // is equivalent to mapping to 0 stars.
-    }
-    return result;
-  }
-
-  /**
-   * Returns a clone of this SaveGame object.
-   */
-  public SaveGame clone() {
-    SaveGame result = new SaveGame();
-    for (String levelName : mLevelStars.keySet()) {
-      result.setLevelStars(levelName, getLevelStars(levelName));
-    }
-    return result;
-  }
-
-  /**
-   * Resets this SaveGame object to be empty. Empty means no stars on no levels.
+   * Resets this SaveGame object to be empty.
    */
   public void zero() {
-    mLevelStars.clear();
+    mGameObjects.clear();
   }
 
   /**
-   * Returns whether or not this SaveGame is empty. Empty means no stars on no levels.
+   * Returns whether or not this SaveGame is empty.
    */
   public boolean isZero() {
-    return mLevelStars.keySet().size() == 0;
+    return mGameObjects.keySet().size() == 0;
   }
 
-  /**
-   * Save this SaveGame object to a SharedPreferences.
-   */
-  public void save(SharedPreferences sp, String key) {
-    SharedPreferences.Editor spe = sp.edit();
-    spe.putString(key, toString());
-    spe.apply();
-  }
-
-  /**
-   * Gets how many stars the player has on the given level. If the level does not exist
-   * in the save game, will return 0.
-   */
-  public int getLevelStars(String levelName) {
-    Integer r = mLevelStars.get(levelName);
-    return r == null ? 0 : r;
-  }
-
-  /**
-   * Gets how many stars the player has on the given level. If the level does not exist
-   * in the save game, will return 0.
-   */
-  public int getLevelStars(int world, int level) {
-    return getLevelStars(String.valueOf(world) + "-" + String.valueOf(level));
-  }
-
-  /**
-   * Sets how many stars the player has on the given level.
-   */
-  public void setLevelStars(String levelName, int stars) {
-    if (stars < MIN_STARS) stars = MIN_STARS;
-    if (stars > MAX_STARS) stars = MAX_STARS;
-    if (stars == 0) {
-      // zero stars means remove it from the map
-      if (mLevelStars.containsKey(levelName)) {
-        mLevelStars.remove(levelName);
-      }
+  public void setGameObject(String title, String object) {
+    if (mGameObjects.containsKey(title)) {
+        mGameObjects.remove(title);
     } else {
-      mLevelStars.put(levelName, stars);
+      mGameObjects.put(title, object);
     }
-  }
-
-  /**
-   * Sets how many stars the player has on the given level.
-   */
-  public void setLevelStars(int world, int level, int stars) {
-    setLevelStars(String.valueOf(world) + "-" + String.valueOf(level), stars);
   }
 }
