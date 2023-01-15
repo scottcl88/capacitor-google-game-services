@@ -1,15 +1,19 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { GoogleGameServicesPlugin } from './definitions';
+import type { GoogleGameServicesPlugin, Player } from './definitions';
 
 export class GoogleGameServicesWeb extends WebPlugin implements GoogleGameServicesPlugin {
   async echo(options: { value: string }): Promise<{ value: string }> {
     console.log('ECHO', options);
     return options;
   }
-  signIn(): Promise<any> {
+  signIn(): Promise<{ isAuthenticated: boolean }> {
     console.warn('GameServices does not have web implementation.');
-    return Promise.resolve();
+    return Promise.resolve({ isAuthenticated: false });
+  }
+  isAuthenticated(): Promise<{ isAuthenticated: boolean }> {
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve({ isAuthenticated: false });
   }
   showSavedGamesUI(): Promise<any> {
     console.warn('GameServices does not have web implementation.');
@@ -19,8 +23,12 @@ export class GoogleGameServicesWeb extends WebPlugin implements GoogleGameServic
     console.warn('GameServices does not have web implementation.');
     return Promise.resolve();
   }
-  loadGame(): Promise<any> {
+  loadGame(): Promise<{ title: string, data: string }> {
     console.warn('GameServices does not have web implementation.');
-    return Promise.resolve();
+    return Promise.resolve({title: "", data: ""});
+  } 
+  getCurrentPlayer(): Promise<{player: Player}>{
+    console.warn('GameServices does not have web implementation.');
+    return Promise.resolve({player: {} as Player});
   }
 }

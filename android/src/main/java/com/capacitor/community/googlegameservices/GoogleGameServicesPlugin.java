@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.util.Log;
 
 import androidx.activity.result.ActivityResult;
-import androidx.annotation.NonNull;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -15,11 +14,13 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
+import com.google.android.gms.games.Player;
+import com.google.android.gms.games.PlayerEntity;
+import com.google.android.gms.games.PlayersClient;
 import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.snapshot.Snapshot;
 import com.google.android.gms.games.snapshot.SnapshotMetadata;
 import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
-import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 
 import java.io.IOException;
@@ -65,9 +66,65 @@ public class GoogleGameServicesPlugin extends Plugin {
     }
 
     @PluginMethod()
+    public void isAuthenticated(final PluginCall call) {
+        Log.d(TAG, "isAuthenticated called");
+
+        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(getActivity());
+
+        gamesSignInClient.isAuthenticated().addOnCompleteListener(isAuthenticatedTask -> {
+            boolean isAuthenticated = (isAuthenticatedTask.isSuccessful() &&
+                    isAuthenticatedTask.getResult().isAuthenticated());
+
+            JSObject ret = new JSObject();
+            ret.put("isAuthenticated", isAuthenticated);
+            if (isAuthenticated) {
+                Log.d(TAG, "User authenticated with google play");
+            } else {
+                Log.d(TAG, "User NOT authenticated with google play");
+            }
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod()
     public void signIn(final PluginCall call) {
         Log.d(TAG, "signIn called");
-        startSignIn();
+
+        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(getActivity());
+
+        gamesSignInClient.signIn().addOnCompleteListener(authenticationResultTask -> {
+            boolean isAuthenticated = (authenticationResultTask.isSuccessful() &&
+                    authenticationResultTask.getResult().isAuthenticated());
+
+            JSObject ret = new JSObject();
+            ret.put("isAuthenticated", isAuthenticated);
+            if (isAuthenticated) {
+                Log.d(TAG, "User authenticated with google play");
+            } else {
+                Log.d(TAG, "User NOT authenticated with google play");
+            }
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod()
+    public void getCurrentPlayer(final PluginCall call) {
+        Log.d(TAG, "getCurrentPlayer called");
+
+        PlayersClient playersClient = PlayGames.getPlayersClient(getActivity());
+
+        playersClient.getCurrentPlayer().addOnSuccessListener((Player player) -> {
+            Log.d(TAG, "Success on getCurrentPlayer");
+            JSObject playerObj = new JSObject();
+            playerObj.put("displayName",player.getDisplayName());
+            playerObj.put("iconImageUrl",player.getIconImageUrl());
+            JSObject ret = new JSObject();
+            ret.put("player", playerObj);
+            call.resolve(ret);
+        }).addOnFailureListener((task) -> {
+            Log.e(TAG, "Failed on getCurrentPlayer", task);
+            call.reject("Failed to getCurrentPlayer: "+task);
+        });
     }
 
     @PluginMethod()
@@ -82,7 +139,7 @@ public class GoogleGameServicesPlugin extends Plugin {
         String data = call.getString("data");
         Log.d(TAG, "saveGame called with title: "+title+" data: "+data);
 
-        mSaveGame.setGameObject("Game #1", "{'something':'1'}");
+        mSaveGame.setGameObject(title, data);
 
         SnapshotMetadata snapshotMetadata =
                 getActivity().getIntent().getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
@@ -92,13 +149,17 @@ public class GoogleGameServicesPlugin extends Plugin {
     @PluginMethod()
     public void loadGame(final PluginCall call) {
         Log.d(TAG, "loadGame called..");
+        String saveName = call.getString("saveName");
+        if(saveName != null && !saveName.isEmpty()){
+            mCurrentSaveName = saveName;
+        }
 
-        loadSnapshot();
+        loadSnapshot(call);
 
         Log.d(TAG, "Finished loadGame with: "+mSaveGame);
     }
 
-    private void loadSnapshot(){
+    private void loadSnapshot(PluginCall call){
         // Get the SnapshotsClient from the signed in account.
         SnapshotsClient snapshotsClient =
                 PlayGames.getSnapshotsClient(getActivity());
@@ -108,44 +169,36 @@ public class GoogleGameServicesPlugin extends Plugin {
 
         // Open the saved game using its name.
         snapshotsClient.open(mCurrentSaveName, true, conflictResolutionPolicy)
-                .addOnFailureListener(e -> Log.e(TAG, "Error while opening Snapshot.", e)).continueWith(task -> {
-                    Snapshot snapshot = task.getResult().getData();
-
-                    // Opening the snapshot was a success and any conflicts have been resolved.
-                    try {
-                        // Extract the raw data from the snapshot.
-                        assert snapshot != null;
-                        return snapshot.getSnapshotContents().readFully();
-                    } catch (IOException e) {
-                        Log.e(TAG, "Error while reading Snapshot.", e);
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error while opening Snapshot.", e);
+                })
+                .continueWith(task -> {
+                    if(task.isSuccessful()){
+                        Snapshot snapshot = task.getResult().getData();
+                        // Opening the snapshot was a success and any conflicts have been resolved.
+                        try {
+                            // Extract the raw data from the snapshot.
+                            assert snapshot != null;
+                            return snapshot.getSnapshotContents().readFully();
+                        } catch (IOException e) {
+                            Log.e(TAG, "Error while reading Snapshot.", e);
+                        }
                     }
-
                     return null;
                 }).addOnCompleteListener(task -> {
-                    byte[] result = task.getResult();
-                    mSaveGame = new SaveGame(result);
-                    Log.d(TAG, "onComplete loadGame = "+mSaveGame);
-                    // Dismiss progress dialog and reflect the changes in the UI when complete.
+                    if(task.isSuccessful()){
+                        byte[] result = task.getResult();
+                        mSaveGame = new SaveGame(result);
+                        Log.d(TAG, "onComplete loadGame = "+mSaveGame);
+
+                        JSObject ret = new JSObject();
+                        ret.put("title", mCurrentSaveName);
+                        ret.put("data", mSaveGame.toString());
+                        call.resolve(ret);
+                    }else{
+                        call.reject(task.getException().toString());
+                    }
                 });
-    }
-
-    private void startSignIn() {
-        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(getActivity());
-
-        gamesSignInClient.isAuthenticated().addOnCompleteListener(isAuthenticatedTask -> {
-            boolean isAuthenticated = (isAuthenticatedTask.isSuccessful() &&
-                    isAuthenticatedTask.getResult().isAuthenticated());
-
-            if (isAuthenticated) {
-                // Continue with Play Games Services
-                Log.d(TAG, "User authenticated with google play");
-            } else {
-                // Disable your integration with Play Games Services or show a
-                // login button to ask players to sign-in. Clicking it should
-                // call GamesSignInClient.signIn().
-                Log.d(TAG, "User NOT authenticated with google play");
-            }
-        });
     }
 
     private void doShowSavedGamesUI(PluginCall call) {
@@ -162,7 +215,7 @@ public class GoogleGameServicesPlugin extends Plugin {
         });
 
         intentTask.addOnCompleteListener(intent -> {
-                Log.i(TAG,"doShowSavedGameUI onComplete called for Intent");
+            Log.i(TAG,"doShowSavedGameUI onComplete called for Intent");
         });
 
         intentTask.addOnFailureListener(intent -> {
@@ -186,7 +239,7 @@ public class GoogleGameServicesPlugin extends Plugin {
                         intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
                 mCurrentSaveName = snapshotMetadata.getUniqueName();
                 Log.i(TAG, "Load snapshot from saved: "+mCurrentSaveName);
-                loadSnapshot();
+                loadSnapshot(call);
             } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
                 // Create a new snapshot named with a unique string
                 String unique = new BigInteger(281, new Random()).toString(13);
@@ -275,15 +328,19 @@ public class GoogleGameServicesPlugin extends Plugin {
                     }
 
                     Log.d(TAG, "Writing data to snapshot: " + snapshotToWrite.getMetadata().getUniqueName());
-                    writeSnapshot(snapshotToWrite)
-                            .addOnCompleteListener(task1 -> {
-                                if (task1.isSuccessful()) {
-                                    Log.i(TAG, "Snapshot saved!");
-                                } else {
+                    try {
+                        writeSnapshot(snapshotToWrite)
+                                .addOnCompleteListener(task1 -> {
+                                    if (task1.isSuccessful()) {
+                                        Log.i(TAG, "Snapshot saved!");
+                                    } else {
 
-                                    Log.e(TAG, "There was a problem writing the snapshot!", task1.getException());
-                                }
-                            });
+                                        Log.e(TAG, "There was a problem writing the snapshot!", task1.getException());
+                                    }
+                                });
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 });
     }
 
@@ -291,14 +348,13 @@ public class GoogleGameServicesPlugin extends Plugin {
      * Generates metadata, takes a screenshot, and performs the write operation for saving a
      * snapshot.
      */
-    private Task<SnapshotMetadata> writeSnapshot(Snapshot snapshot) {
+    private Task<SnapshotMetadata> writeSnapshot(Snapshot snapshot) throws IOException {
         // Set the data payload for the snapshot.
         snapshot.getSnapshotContents().writeBytes(mSaveGame.toBytes());
 
         // Save the snapshot.
         SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
-                .setCoverImage()
-                .setDescription("Modified data at: " + Calendar.getInstance().getTime())
+                .setDescription("Modified at: " + Calendar.getInstance().getTime())
                 .build();
         return SnapshotCoordinator.getInstance().commitAndClose(mSnapshotsClient, snapshot, metadataChange);
     }

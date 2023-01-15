@@ -15,9 +15,12 @@ npx cap sync
 
 * [`echo(...)`](#echo)
 * [`signIn()`](#signin)
+* [`isAuthenticated()`](#isauthenticated)
 * [`showSavedGamesUI()`](#showsavedgamesui)
 * [`saveGame(...)`](#savegame)
 * [`loadGame()`](#loadgame)
+* [`getCurrentPlayer()`](#getcurrentplayer)
+* [Interfaces](#interfaces)
 
 </docgen-index>
 
@@ -42,10 +45,21 @@ echo(options: { value: string; }) => Promise<{ value: string; }>
 ### signIn()
 
 ```typescript
-signIn() => Promise<any>
+signIn() => Promise<{ isAuthenticated: boolean; }>
 ```
 
-**Returns:** <code>Promise&lt;any&gt;</code>
+**Returns:** <code>Promise&lt;{ isAuthenticated: boolean; }&gt;</code>
+
+--------------------
+
+
+### isAuthenticated()
+
+```typescript
+isAuthenticated() => Promise<{ isAuthenticated: boolean; }>
+```
+
+**Returns:** <code>Promise&lt;{ isAuthenticated: boolean; }&gt;</code>
 
 --------------------
 
@@ -79,11 +93,33 @@ saveGame(options: { title: string; data: string; }) => Promise<any>
 ### loadGame()
 
 ```typescript
-loadGame() => Promise<any>
+loadGame() => Promise<{ title: string; data: string; }>
 ```
 
-**Returns:** <code>Promise&lt;any&gt;</code>
+**Returns:** <code>Promise&lt;{ title: string; data: string; }&gt;</code>
 
 --------------------
+
+
+### getCurrentPlayer()
+
+```typescript
+getCurrentPlayer() => Promise<{ player: Player; }>
+```
+
+**Returns:** <code>Promise&lt;{ player: <a href="#player">Player</a>; }&gt;</code>
+
+--------------------
+
+
+### Interfaces
+
+
+#### Player
+
+| Prop               | Type                |
+| ------------------ | ------------------- |
+| **`displayName`**  | <code>string</code> |
+| **`iconImageUrl`** | <code>string</code> |
 
 </docgen-api>
