@@ -1,6 +1,4 @@
 export interface GoogleGameServicesPlugin {
-  echo(options: { value: string }): Promise<{ value: string }>;
-
   signIn(): Promise<{ isAuthenticated: boolean }>;
   isAuthenticated(): Promise<{ isAuthenticated: boolean }>;
   showSavedGamesUI(): Promise<any>;
@@ -10,6 +8,5 @@ export interface GoogleGameServicesPlugin {
 }
 export interface Player {
   displayName: string;
-
   iconImageUrl: string;
 }

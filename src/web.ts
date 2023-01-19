@@ -3,10 +3,6 @@ import { WebPlugin } from '@capacitor/core';
 import type { GoogleGameServicesPlugin, Player } from './definitions';
 
 export class GoogleGameServicesWeb extends WebPlugin implements GoogleGameServicesPlugin {
-  async echo(options: { value: string }): Promise<{ value: string }> {
-    console.log('ECHO', options);
-    return options;
-  }
   signIn(): Promise<{ isAuthenticated: boolean }> {
     console.warn('GameServices does not have web implementation.');
     return Promise.resolve({ isAuthenticated: false });
