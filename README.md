@@ -20,12 +20,12 @@ npx cap sync
 You will first need to setup your app project with Google Play Game Services. Please follow the steps from their [documentation here](https://developers.google.com/games/services/console/enabling).
 If you are using additional features such as saved games, achievements, leaderboards, or translations; there are additional steps to [conduct here](https://developers.google.com/games/services/console/configuring).
 
-Once all this steps are done, you just need to call the sign method of the plugin.
+Once all the steps are done, you just need to import the plugin.
 
 ```ts
 import { GoogleGameServices } from "capacitor-google-game-services";
-const data = await GoogleGameServices.signIn();
-console.log("User is authenticated: ", data.isAuthenticated);
+const isAuthenticated = await GoogleGameServices.isAuthenticated();
+console.log("User is authenticated: ", isAuthenticated);
 ```
 
 ## API
