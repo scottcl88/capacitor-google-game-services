@@ -2,7 +2,11 @@
 
 An android only capacitor plugin for Googles Play game services.
 
-Sourced from [Google Play game services - Android Samples](https://github.com/playgameservices/android-basic-samples) and [OpenForge](https://github.com/openforge/capacitor-game-services)
+Credits to [Google Play game services - Android Samples](https://github.com/playgameservices/android-basic-samples) and [OpenForge](https://github.com/openforge/capacitor-game-services)
+
+## Supported Versions
+- Capacitor v6
+- Google Play Game Services SDK v2:17.0.0
 
 ## Install
 
