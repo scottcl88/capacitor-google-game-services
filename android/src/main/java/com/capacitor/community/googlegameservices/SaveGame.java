@@ -20,6 +20,8 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.getcapacitor.JSObject;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -28,16 +30,11 @@ import java.util.Iterator;
 import java.util.Map;
 
 public class SaveGame {
-
     private static final String TAG = "GoogleGameServices";
+    private String version = "1.0";
+    private final Map<String, String> mGameObjects = new HashMap<>();
 
-    // serialization format version
-    private static final String SERIAL_VERSION = "1.1";
-
-    Map<String, String> mGameObjects = new HashMap<String, String>();
-
-    public SaveGame() {
-    }
+    public SaveGame() {  }
 
     /**
      * Constructs a SaveGame object from serialized data.
@@ -64,16 +61,17 @@ public class SaveGame {
 
         try {
             JSONObject obj = new JSONObject(json);
-            String format = obj.getString("version");
-            if (!format.equals(SERIAL_VERSION)) {
-                throw new RuntimeException("Unexpected version format " + format);
+            String objVersion = obj.getString("version");
+            if(!objVersion.isEmpty()){
+                version = objVersion;
             }
-            JSONObject data = obj.getJSONObject("data");
+
+            JSONObject data = new JSONObject(obj.getString("data"));
             Iterator<?> iter = data.keys();
 
             while (iter.hasNext()) {
-                String title = (String) iter.next();
-                mGameObjects.put(title, data.getString(title));
+                String key = (String) iter.next();
+                mGameObjects.put(key, data.getString(key));
             }
         } catch (JSONException ex) {
             ex.printStackTrace();
@@ -104,10 +102,30 @@ public class SaveGame {
                 data.put(key, mGameObjects.get(key));
             }
             JSONObject obj = new JSONObject();
-            obj.put("version", SERIAL_VERSION);
-            obj.put("data", data);
+            obj.put("version", version);
+            obj.put("data", data.toString());
             return obj.toString();
         } catch (JSONException ex) {
+            ex.printStackTrace();
+            throw new RuntimeException("Error converting save data to JSON.", ex);
+        }
+    }
+
+    /**
+     * Serializes this SaveGame to a JSObject.
+     */
+    @NonNull
+    public JSObject toJSObject() {
+        try {
+            JSObject data = new JSObject();
+            for (String key : mGameObjects.keySet()) {
+                data.put(key, mGameObjects.get(key));
+            }
+            JSObject obj = new JSObject();
+            obj.put("version", version);
+            obj.put("data", data.toString());
+            return obj;
+        } catch (Exception ex) {
             ex.printStackTrace();
             throw new RuntimeException("Error converting save data to JSON.", ex);
         }
@@ -136,5 +154,13 @@ public class SaveGame {
     public void setGameObject(String key, String value) {
         mGameObjects.remove(key);
         mGameObjects.put(key, value);
+    }
+
+    /**
+     * Sets the version of the SaveGame, to check between different save data if needed
+     * @param newVersion The version in format X.X
+     */
+    public void setVersion(String newVersion) {
+        version = newVersion;
     }
 }

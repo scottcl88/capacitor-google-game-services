@@ -1,7 +1,7 @@
 {
   "name": "capacitor-google-game-services",
   "version": "1.0.0",
-  "description": "A native only capacitor plugin for googles play services library and apples game center library",
+  "description": "An android only capacitor plugin for Googles Play game services.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
