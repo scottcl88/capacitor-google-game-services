@@ -138,3 +138,11 @@ Returns a player object of the currently signed in player
 | **`iconImageUrl`** | <code>string</code> |
 
 </docgen-api>
+
+## AI-assisted development
+
+This project was developed with the assistance of AI tools. AI-generated content is reviewed by the maintainer but may contain errors. See [SECURITY.md](SECURITY.md) to report security issues, and the license below.
+
+## License
+
+See [LICENSE](LICENSE) for license terms.
